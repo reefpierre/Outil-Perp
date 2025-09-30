@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <title>Calculateur SL/TP avec Zones</title>
+    <style> .critique { background: red; color: white; } .soft { background: orange; } .neutre { background: green; color: white; } </style>
+</head>
+<body>
+    <h2>Calculateur SL/TP & Zones de Risque</h2>
+    <label>Entry Price: <input type="number" id="entry" value="60000" step="0.01"></label><br>
+    <label>Levier: <input type="number" id="lev" value="10"></label><br>
+    <label>Risque %: <input type="number" id="risk" value="2" step="0.1"></label><br>
+    <label>Reward/Risk: <input type="number" id="rr" value="2"></label><br>
+    <label>Side: <select id="side"><option value="long">Long</option><option value="short">Short</option></select></label><br>
+    <button onclick="calcSLTP()">Calculer</button>
+    <div id="results"></div>
+
+    <script>
+        function calcSLTP() {
+            const entry = parseFloat(document.getElementById('entry').value);
+            const lev = parseFloat(document.getElementById('lev').value);
+            const risk = parseFloat(document.getElementById('risk').value) / 100;
+            const rr = parseFloat(document.getElementById('rr').value);
+            const side = document.getElementById('side').value;
+
+            const slDistance = (1 / lev) * risk * 100;  // % distance pour liquidation
+            let slPrice = side === 'long' ? entry * (1 - slDistance / 100) : entry * (1 + slDistance / 100);
+            let tpPrice = side === 'long' ? entry * (1 + rr * slDistance / 100) : entry * (1 - rr * slDistance / 100);
+
+            const riskLevel = risk * 100 > 5 ? 'critique' : risk * 100 > 2 ? 'soft' : 'neutre';
+            const zoneClass = riskLevel;
+
+            document.getElementById('results').innerHTML = `
+                <p class="${zoneClass}">SL Price: ${slPrice.toFixed(2)} (Risque: ${ (risk * 100).toFixed(1) }% - Zone: ${zoneClass.toUpperCase()})</p>
+                <p>TP Price: ${tpPrice.toFixed(2)}</p>
+                <p>${zoneClass === 'critique' ? '⚠️ Attention : Haut risque de liquidation !' : zoneClass === 'soft' ? '🟡 Zone modérée, surveille.' : '✅ Zone sûre.'}</p>
+            `;
+        }
+        calcSLTP();
+    </script>
+</body>
+</html>
