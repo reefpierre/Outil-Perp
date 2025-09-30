@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Calculateur APR Funding Hyperliquid & Aster</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style> table { border-collapse: collapse; width: 100%; } th, td { border: 1px solid #ddd; padding: 8px; } </style>
+</head>
+<body>
+    <h2>Tableau Interactif Funding Rates & APR Net</h2>
+    <label>Position Size (USDC): <input type="number" id="size" value="10000"></label>
+    <label>Levier: <input type="number" id="levier" value="10"></label>
+    <label>Side: <select id="side"><option value="long">Long</option><option value="short">Short</option></select></label>
+    <button onclick="updateTable()">Mettre à Jour</button>
+    <table id="fundingTable">
+        <thead><tr><th>Paire</th><th>Exchange</th><th>Funding Rate (%/période)</th><th>Spread (%)</th><th>Rendement Net / Funding (USDC)</th><th>APR Net Annuel (%)</th></tr></thead>
+        <tbody></tbody>
+    </table>
+    <canvas id="aprChart" width="400" height="200"></canvas>
+
+    <script>
+        async function fetchHyperliquidData() {
+            const response = await fetch('https://api.hyperliquid.xyz/info', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ type: 'metaAndAssetCtxs' })
+            });
+            const data = await response.json();
+            return data.universe[1].map(ctx => ({
+                pair: ctx[0],  // e.g., 'BTC'
+                exchange: 'Hyperliquid',
+                funding: parseFloat(ctx[1].funding) * 100,  // en %
+                spread: ((parseFloat(ctx[1].impactPxs[0]) - parseFloat(ctx[1].impactPxs[1])) / parseFloat(ctx[1].markPx)) * 100  // approx bid-ask
+            }));
+        }
+
+        async function fetchAsterData() {
+            // Simulé car pas d'API publique directe ; utilise page scrape ou API custom. Remplace par fetch réel si dispo.
+            // Exemple statique pour démo ; en prod, fetch 'https://www.asterdex.com/en/futures/futures-info/real-time-funding-rate'
+            return [
+                { pair: 'BTC', exchange: 'Aster', funding: 0.01, spread: 0.02 },  // % / 8h
+                { pair: 'ETH', exchange: 'Aster', funding: 0.015, spread: 0.025 }
+                // Ajoute fetch via proxy ou direct si API exposée
+            ];
+        }
+
+        function calculateYield(fundingRate, size, levier, side, spread, isHyper = true) {
+            const periodHours = isHyper ? 1 : 8;
+            const value = size * levier;
+            const sign = (side === 'long' && fundingRate > 0) || (side === 'short' && fundingRate < 0) ? 1 : -1;
+            const netPerFunding = sign * fundingRate / 100 * value - (spread / 100 * value);
+            const annual = netPerFunding * (8760 / periodHours) / size;  // APR net %
+            return { netPerFunding: netPerFunding.toFixed(2), apr: annual.toFixed(2) };
+        }
+
+        async function updateTable() {
+            const size = parseFloat(document.getElementById('size').value);
+            const levier = parseFloat(document.getElementById('levier').value);
+            const side = document.getElementById('side').value;
+            const hyperData = await fetchHyperliquidData();
+            const asterData = await fetchAsterData();
+            const allData = [...hyperData, ...asterData];
+
+            let tableBody = '';
+            const labels = [], aprs = [];
+            allData.slice(0, 10).forEach(row => {  // Top 10
+                const calcs = calculateYield(row.funding, size, levier, side, row.spread, row.exchange === 'Hyperliquid');
+                tableBody += `<tr><td>${row.pair}</td><td>${row.exchange}</td><td>${row.funding.toFixed(4)}</td><td>${row.spread.toFixed(4)}</td><td>${calcs.netPerFunding}</td><td>${calcs.apr}</td></tr>`;
+                labels.push(row.pair);
+                aprs.push(parseFloat(calcs.apr));
+            });
+            document.querySelector('#fundingTable tbody').innerHTML = tableBody;
+
+            // Chart APR
+            const ctx = document.getElementById('aprChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'bar',
+                data: { labels, datasets: [{ label: 'APR Net (%)', data: aprs, backgroundColor: aprs.map(a => a > 0 ? 'green' : 'red') }] },
+                options: { scales: { y: { beginAtZero: true } } }
+            });
+        }
+        updateTable();  // Load initial
+    </script>
+</body>
+</html>
